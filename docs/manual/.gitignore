@@ -1,0 +1,9 @@
+# LaTeX build files
+*.aux
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+/BranchMorphoGen_UserManual.pdf

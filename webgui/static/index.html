@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BranchMorphoGen · Live</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/logo.svg">
+<style>
+:root{
+  --bg:#0f1216; --panel:#161a20; --panel2:#1c2129; --line:#2a313b; --text:#e6e9ee; --muted:#8b95a3;
+  --accent:#4fb3a9; --accent2:#e3a14f; --danger:#e06c6c; --ok:#6cc58b;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+button,select,input,textarea{font:inherit;color:inherit}
+#app{display:grid;grid-template-columns:400px 1fr;grid-template-rows:52px 1fr;height:100vh}
+header{grid-column:1/3;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+header img{height:30px}
+header h1{font-size:15px;margin:0 8px 0 0;font-weight:600;letter-spacing:.2px}
+header h1 span{color:var(--muted);font-weight:400}
+.sp{flex:1}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 11px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:#3b4552}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#06221f;font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--danger)}
+.btn:disabled{opacity:.45;cursor:default}
+.tog{display:flex;align-items:center;gap:6px;color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}
+.tog input{accent-color:var(--accent)}
+select{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+#status{padding:3px 10px;border-radius:999px;font-size:12px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+#status.running{color:var(--accent2);border-color:var(--accent2)}
+#status.done{color:var(--ok);border-color:var(--ok)}
+#status.error{color:var(--danger);border-color:var(--danger)}
+#status.running::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent2);margin-right:6px;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+
+/* sidebar */
+aside{background:var(--panel);border-right:1px solid var(--line);overflow:auto;display:flex;flex-direction:column}
+.side-top{position:sticky;top:0;background:var(--panel);padding:10px 12px;border-bottom:1px solid var(--line);z-index:2;display:flex;gap:6px}
+.side-top input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+details.group{border-bottom:1px solid var(--line)}
+details.group>summary{list-style:none;cursor:pointer;padding:9px 12px;font-weight:600;display:flex;align-items:center;gap:8px;color:#cfd5dd}
+details.group>summary::before{content:"▸";color:var(--muted);transition:transform .15s}
+details.group[open]>summary::before{transform:rotate(90deg)}
+details.group>summary .cnt{margin-left:auto;font-weight:400;color:var(--muted);font-size:11px}
+.prow{padding:5px 12px 7px;display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:start}
+.prow.wide{grid-template-columns:1fr}
+.prow label{font-family:var(--mono);font-size:11.5px;color:#c4cbd4;padding-top:6px;overflow:hidden;text-overflow:ellipsis}
+.prow .help{grid-column:1/-1;color:var(--muted);font-size:11px;margin-top:-3px}
+.prow.changed label{color:var(--accent)}
+.prow.changed label::after{content:" •"}
+.prow input[type=text],.prow input[type=number],.prow select,.prow textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-family:var(--mono);font-size:12px}
+.prow input:focus,.prow textarea:focus,.prow select:focus{outline:none;border-color:var(--accent)}
+.prow textarea{resize:vertical;min-height:30px}
+.prow .warn{grid-column:1/-1;color:var(--danger);font-size:11px}
+.switch{position:relative;width:36px;height:20px;margin-top:4px}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;background:#333b46;border-radius:20px;cursor:pointer;transition:.15s}
+.switch span::before{content:"";position:absolute;width:14px;height:14px;left:3px;top:3px;border-radius:50%;background:#cfd5dd;transition:.15s}
+.switch input:checked+span{background:var(--accent)}
+.switch input:checked+span::before{transform:translateX(16px);background:#06221f}
+table.ts{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+table.ts td{padding:2px 2px}
+table.ts td:first-child{width:72px}
+table.ts input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:4px 5px;font-family:var(--mono);font-size:12px}
+table.ts .x{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 5px}
+table.ts .x:hover{color:var(--danger)}
+.tsbar{display:flex;gap:8px;align-items:center;margin-top:3px;font-size:11px;color:var(--muted)}
+.tsbar a{color:var(--accent);cursor:pointer}
+.swcup{font-size:11px;color:var(--muted)}
+
+/* main */
+main{display:grid;grid-template-rows:1fr auto 170px;min-width:0;min-height:0}
+#viewwrap{position:relative;min-height:0;background:radial-gradient(ellipse at center,#141920 0%,#0b0e12 100%)}
+#view{position:absolute;inset:0;width:100%;height:100%;cursor:grab}
+#view.drag{cursor:grabbing}
+#img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:pixelated;display:none;padding:10px}
+.ov{position:absolute;pointer-events:none;font-family:var(--mono);font-size:12px;color:#cfd5dd;text-shadow:0 1px 2px #000}
+#tlabel{top:12px;left:14px;font-size:20px;font-weight:600}
+#tlabel small{display:block;font-size:12px;color:var(--muted);font-weight:400}
+#fstats{top:64px;left:14px;line-height:1.6;color:var(--muted)}
+#scalebar{bottom:14px;left:14px}
+#scalebar div{height:3px;background:#e6e9ee;margin-bottom:3px}
+#legend{bottom:14px;right:14px;text-align:right}
+#legend canvas{display:block;margin-left:auto;margin-top:3px;border-radius:2px}
+#empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);pointer-events:none;text-align:center}
+#empty b{color:var(--text);font-size:15px}
+.vtools{position:absolute;top:56px;right:14px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.vtools .row{display:flex;gap:6px;align-items:center;background:rgba(22,26,32,.85);border:1px solid var(--line);border-radius:7px;padding:4px 6px}
+.vtools .btn{padding:4px 8px;font-size:12px}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{background:var(--panel2);border:none;padding:4px 9px;cursor:pointer;font-size:12px;color:var(--muted)}
+.seg button.on{background:var(--accent);color:#06221f}
+
+#timeline{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+#timeline input[type=range]{flex:1;accent-color:var(--accent)}
+#flabel{font-family:var(--mono);font-size:12px;color:var(--muted);min-width:170px;text-align:right}
+#bottom{display:grid;grid-template-columns:1fr 360px;min-height:0;overflow:hidden}
+#chartwrap{position:relative;min-width:0;min-height:0;overflow:hidden}
+#chart{position:absolute;inset:0;width:100%;height:100%;display:block}
+#side2{border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;background:none;border:none;padding:6px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.tabs button.on{color:var(--text);border-bottom-color:var(--accent)}
+.tabpane{flex:1;overflow:auto;padding:8px 10px;display:none;min-height:0}
+.tabpane.on{display:block}
+#log{margin:0;font-family:var(--mono);font-size:11px;color:#b7c0cc;white-space:pre-wrap;word-break:break-all}
+.dl a{display:block;color:var(--accent);text-decoration:none;font-family:var(--mono);font-size:12px;padding:2px 0}
+.dl a:hover{text-decoration:underline}
+.dl .muted{color:var(--muted);font-size:11px;margin-top:6px}
+.err{background:#3a1d1f;border:1px solid #6b2d31;color:#f0b4b4;padding:8px 10px;border-radius:6px;margin:8px 12px;font-size:12px;display:none;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <img src="/logo.svg" alt="" onerror="this.style.display='none'">
+    <h1>BranchMorphoGen <span>live interface</span></h1>
+    <select id="preset" title="Load parameters from an .in file in the package folder"></select>
+    <button class="btn" id="importBtn" title="Load a parameters .in file">Import .in</button>
+    <button class="btn" id="exportBtn" title="Download the current parameters as .in">Export .in</button>
+    <input type="file" id="importFile" accept=".in,.txt" hidden>
+    <div class="sp"></div>
+    <label class="tog" title="Restart the simulation automatically, shortly after any parameter change"><input type="checkbox" id="autorun" checked> Auto-run on change</label>
+    <label class="tog" title="Writes coarse 2 µm TIFFs and at least 40 snapshots, so frames arrive quickly and often. Turn off for a full-resolution run."><input type="checkbox" id="preview" checked> Fast preview</label>
+    <span id="status">idle</span>
+    <button class="btn primary" id="runBtn">▶ Run</button>
+    <button class="btn danger" id="stopBtn" disabled>■ Stop</button>
+  </header>
+
+  <aside>
+    <div class="side-top">
+      <input id="filter" placeholder="Filter parameters…">
+      <button class="btn" id="resetBtn" title="Reset to the selected preset">Reset</button>
+    </div>
+    <div id="binerr" class="err"></div>
+    <div id="params"></div>
+  </aside>
+
+  <main>
+    <div id="viewwrap">
+      <canvas id="view"></canvas>
+      <img id="img" alt="synthetic image">
+      <div id="empty"><b>No simulation yet</b>Press ▶ Run (or change any parameter) to start.<br>Snapshots stream in here as the simulator writes them.</div>
+      <div class="ov" id="tlabel"></div>
+      <div class="ov" id="fstats"></div>
+      <div class="ov" id="scalebar"></div>
+      <div class="ov" id="legend"></div>
+      <div class="vtools">
+        <div class="row">
+          <div class="seg" id="modeSeg"><button data-m="morph" class="on">Morphology</button><button data-m="tif">Synthetic image</button></div>
+        </div>
+        <div class="row" id="morphTools">
+          <select id="colorBy" title="Colour branches by">
+            <option value="dist" selected>Path distance</option>
+            <option value="order">Branch order</option>
+            <option value="radius">Radius</option>
+            <option value="z">Depth (z)</option>
+            <option value="mono">Single colour</option>
+          </select>
+          <label class="tog" title="Draw the (time-dependent) boundary"><input type="checkbox" id="showBox" checked> box</label>
+          <label class="tog" title="Scale line width with branch radius"><input type="checkbox" id="showRad" checked> radius</label>
+          <button class="btn" id="fitBtn" title="Fit view (double-click canvas)">Fit</button>
+        </div>
+        <div class="row" id="rotHint" style="display:none;color:var(--muted);font-size:11px">3D: drag to rotate · shift-drag to pan · wheel to zoom</div>
+      </div>
+    </div>
+    <div id="timeline">
+      <button class="btn" id="playBtn" title="Play / pause frames">▶</button>
+      <select id="sampleSel" title="Sample" style="display:none"></select>
+      <input type="range" id="slider" min="0" max="0" value="0">
+      <label class="tog" title="Jump to each new frame as it arrives"><input type="checkbox" id="follow" checked> follow live</label>
+      <span id="flabel">–</span>
+    </div>
+    <div id="bottom">
+      <div id="chartwrap"><canvas id="chart"></canvas></div>
+      <div id="side2">
+        <div class="tabs"><button data-t="files" class="on">Files</button><button data-t="log">Log</button><button data-t="runs">Runs</button></div>
+        <div class="tabpane on dl" id="tab-files"><div class="muted">Files of the current frame appear here.</div></div>
+        <div class="tabpane" id="tab-log"><pre id="log"></pre></div>
+        <div class="tabpane dl" id="tab-runs"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const state = {
+  schema: null, presets: {}, base: {}, values: {}, swcText: null, swcName: null,
+  run: null, es: null, runParams: null, frames: {}, stats: {}, sample: 1, idx: 0,
+  follow: true, view: {cx:0, cy:0, scale:1, yaw:0, pitch:0}, fitted: false,
+  mode: 'morph', playing: false, autoTimer: null, unit: 'µm', tunit: 'min',
+};
+
+/* ---------------- parameters panel ---------------- */
+async function init(){
+  const r = await fetch('/api/schema').then(r=>r.json());
+  state.schema = r.schema; state.presets = r.presets;
+  const names = Object.keys(r.presets);
+  const sel = $('#preset');
+  sel.innerHTML = names.map(n=>`<option ${n==='parameters.in'?'selected':''}>${n}</option>`).join('');
+  if(!r.binary){
+    const e=$('#binerr'); e.style.display='block';
+    e.textContent='BranchMorphoGen executable not found.\nBuild the core first (mkdir build && cd build && cmake .. && make), or restart the server with --build or --binary /path/to/BranchMorphoGen.';
+  }
+  loadValues(r.presets['parameters.in'] || r.defaults, true);
+  sel.onchange = () => { loadValues(state.presets[sel.value], true); changed(); };
+  refreshRuns();
+}
+
+function loadValues(vals, asBase){
+  const v = JSON.parse(JSON.stringify(vals||{}));
+  // fill keys missing from the preset with empty values so they're editable
+  for(const g of state.schema) for(const it of g.items){
+    if(!(it.key in v)) v[it.key] = it.kind==='ts' ? [[null,'']] : (it.kind==='bool' ? 'false' : '');
+  }
+  state.values = v;
+  if(asBase) state.base = JSON.parse(JSON.stringify(v));
+  buildPanel();
+}
+
+function isTrue(v){ return ['true','1','yes'].includes(String(v).trim().toLowerCase()); }
+
+function buildPanel(){
+  const root = $('#params'); root.innerHTML='';
+  const openGroups = ['Simulation','Tip states','Branching'];
+  for(const g of state.schema){
+    const d = document.createElement('details'); d.className='group'; d.open = openGroups.includes(g.group);
+    d.innerHTML = `<summary>${g.group}<span class="cnt">${g.items.length}</span></summary>`;
+    for(const it of g.items) d.appendChild(buildRow(it));
+    root.appendChild(d);
+  }
+  validate(); markChanged();
+}
+
+function buildRow(it){
+  const row = document.createElement('div');
+  row.className = 'prow'; row.dataset.key = it.key; row.title = it.help;
+  const v = state.values[it.key];
+  const lab = `<label for="p-${it.key}">${it.key}</label>`;
+  if(it.kind==='bool'){
+    row.innerHTML = `${lab}<label class="switch"><input type="checkbox" id="p-${it.key}" ${isTrue(v)?'checked':''}><span></span></label>`;
+    row.querySelector('input').onchange = e => { state.values[it.key] = e.target.checked?'true':'false'; onParam(it.key); };
+  } else if(it.kind.startsWith('choice:')){
+    const opts = it.kind.slice(7).split('|');
+    const cur = String(v);
+    const has = opts.some(o=>o.toLowerCase()===cur.toLowerCase());
+    row.innerHTML = `${lab}<select id="p-${it.key}">${(has?[]:[cur]).concat(opts).map(o=>`<option ${o.toLowerCase()===cur.toLowerCase()?'selected':''}>${o}</option>`).join('')}</select>`;
+    row.querySelector('select').onchange = e => { state.values[it.key]=e.target.value; onParam(it.key); };
+  } else if(it.kind==='ts'){
+    row.className += ' wide';
+    row.innerHTML = `${lab}<div class="tsbox"></div>`;
+    renderTS(row.querySelector('.tsbox'), it);
+  } else if(it.kind==='matrix'){
+    row.innerHTML = `${lab}<textarea id="p-${it.key}" rows="2" spellcheck="false"></textarea>`;
+    const ta=row.querySelector('textarea'); ta.value = String(v).split(';').map(s=>s.trim()).filter(Boolean).join(';\n');
+    ta.oninput = e => { state.values[it.key] = e.target.value.replace(/\s*\n\s*/g,''); onParam(it.key); };
+  } else {
+    const num = (it.kind==='number'||it.kind==='int') && /^-?[\d.eE+-]+$/.test(String(v).trim());
+    row.innerHTML = `${lab}<input id="p-${it.key}" type="text" inputmode="${num?'decimal':'text'}" spellcheck="false">`;
+    const inp=row.querySelector('input'); inp.value = v;
+    inp.oninput = e => { state.values[it.key]=e.target.value; onParam(it.key); };
+    if(num){ // arrow keys nudge numbers
+      inp.onkeydown = e => {
+        if(e.key!=='ArrowUp'&&e.key!=='ArrowDown') return;
+        const x=parseFloat(inp.value); if(isNaN(x)) return; e.preventDefault();
+        const dec=(inp.value.split('.')[1]||'').length; const step=it.kind==='int'?1:Math.pow(10,-Math.max(dec,0)) * (e.shiftKey?10:1);
+        const nv = x + (e.key==='ArrowUp'?step:-step);
+        inp.value = it.kind==='int'? String(Math.round(nv)) : nv.toFixed(dec);
+        inp.dispatchEvent(new Event('input'));
+      };
+    }
+  }
+  if(it.key==='SWCFileName'){
+    const up=document.createElement('div'); up.className='help swcup';
+    up.innerHTML=`<input type="file" accept=".swc" id="swcFile"> <span id="swcName">${state.swcName?('uploaded: '+state.swcName):''}</span>`;
+    row.appendChild(up);
+    up.querySelector('input').onchange = async e => {
+      const f=e.target.files[0]; if(!f) return;
+      state.swcText = await f.text(); state.swcName=f.name;
+      state.values.SWCFileName = f.name; row.querySelector('#p-SWCFileName').value=f.name;
+      $('#swcName').textContent='uploaded: '+f.name; onParam('SWCFileName');
+    };
+  }
+  const h=document.createElement('div'); h.className='help'; h.textContent=it.help; row.appendChild(h);
+  const w=document.createElement('div'); w.className='warn'; row.appendChild(w);
+  return row;
+}
+
+function renderTS(box, it){
+  const rows = state.values[it.key];
+  const constant = rows.length===1 && (rows[0][0]===null || rows[0][0]==='');
+  let html = '<table class="ts">';
+  rows.forEach((r,i)=>{
+    html += `<tr>${constant?'':`<td><input data-i="${i}" data-c="0" value="${r[0]??''}" placeholder="time"></td>`}
+      <td><input data-i="${i}" data-c="1" value="${String(r[1]).replace(/"/g,'&quot;')}" spellcheck="false"></td>
+      ${constant?'':`<td style="width:22px"><button class="x" data-del="${i}" title="remove row">✕</button></td>`}</tr>`;
+  });
+  html += '</table><div class="tsbar">';
+  html += constant ? `<span>constant</span><a data-act="tdep">make time-dependent</a>`
+                   : `<span>time : value</span><a data-act="add">+ add row</a><a data-act="const">make constant</a>`;
+  html += '</div>';
+  box.innerHTML = html;
+  box.querySelectorAll('input').forEach(inp => inp.oninput = e => {
+    const i=+inp.dataset.i, c=+inp.dataset.c; state.values[it.key][i][c] = inp.value; onParam(it.key);
+  });
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    const rs=state.values[it.key]; if(rs.length<=1) return; rs.splice(+b.dataset.del,1); renderTS(box,it); onParam(it.key);
+  });
+  box.querySelectorAll('[data-act]').forEach(a => a.onclick = () => {
+    const rs=state.values[it.key]; const act=a.dataset.act;
+    if(act==='add'){ const last=rs[rs.length-1]; const t=parseFloat(last[0]); rs.push([isNaN(t)?'':String(t+100), last[1]]); }
+    if(act==='tdep'){ const ts=state.values.Time_Start||0, te=state.values.Time_End||1; state.values[it.key]=[[String(ts),rs[0][1]],[String(te),rs[0][1]]]; }
+    if(act==='const'){ state.values[it.key]=[[null, rs[0][1]]]; }
+    renderTS(box,it); onParam(it.key);
+  });
+}
+
+function onParam(key){
+  validate(); markChanged();
+  if($('#autorun').checked){
+    clearTimeout(state.autoTimer);
+    state.autoTimer = setTimeout(()=>{ if(!hasErrors()) runSim(); }, 1200);
+  }
+}
+function changed(){ onParam(null); }
+
+function markChanged(){
+  document.querySelectorAll('.prow').forEach(r=>{
+    const k=r.dataset.key;
+    r.classList.toggle('changed', JSON.stringify(state.values[k])!==JSON.stringify(state.base[k]));
+  });
+}
+
+const nums = s => String(s).split(',').map(x=>x.trim()).filter(x=>x!=='');
+function validate(){
+  const V=state.values, warn={};
+  const ns = nums(V.States).length, nc = nums(V.Collision_States).length;
+  const tsRows = k => (V[k]||[]).filter(r=>String(r[1]).trim()!=='');
+  for(const [k,v] of Object.entries(V)){
+    const it = findItem(k); if(!it) continue;
+    if((it.kind==='number')&&String(v).trim()!==''&&isNaN(Number(v))&&!/^-?inf$/i.test(String(v).trim())) warn[k]='not a number';
+    if(it.kind==='int'&&!/^-?\d+$/.test(String(v).trim())) warn[k]='must be an integer';
+  }
+  tsRows('StateVelocity').forEach(r=>{ if(nums(r[1]).length!==ns) warn.StateVelocity=`each row needs ${ns} velocities (one per state)`; });
+  tsRows('TransitionRates').forEach(r=>{ const m=String(r[1]).split(';').filter(s=>s.trim()); if(m.length!==ns||m.some(x=>nums(x).length!==ns)) warn.TransitionRates=`each row must be a ${ns}×${ns} matrix (rows separated by ;)`; });
+  if(nums(V.Collision_StateVelocity).length!==nc) warn.Collision_StateVelocity=`needs ${nc} values`;
+  {const m=String(V.Collision_TransitionRates).split(';').filter(s=>s.trim()); if(m.length!==nc||m.some(x=>nums(x).length!==nc)) warn.Collision_TransitionRates=`must be a ${nc}×${nc} matrix`;}
+  for(const k of ['LimitsX','LimitsY','LimitsZ']) tsRows(k).forEach(r=>{ if(nums(r[1]).length!==2) warn[k]='each row needs min,max'; });
+  for(const k of ['LimitsX','LimitsY','LimitsZ','StateVelocity','TransitionRates','BranchingRate']){
+    const rs=V[k]||[]; if(rs.length>1 && rs.some(r=>r[0]===null||String(r[0]).trim()===''||isNaN(Number(r[0])))) warn[k]=(warn[k]?warn[k]+'; ':'')+'every row needs a time';
+  }
+  if(!/^\s*\d+\s*(-\s*\d+)?\s*$/.test(String(V.N_BranchInitial))) warn.N_BranchInitial='use a number or a range like 2-4';
+  if(isTrue(V.ReadFromSWC) && !state.swcText) warn.SWCFileName='upload an .swc file (or the path must exist relative to the package folder)';
+  document.querySelectorAll('.prow').forEach(r=>{ const w=r.querySelector('.warn'); if(w) w.textContent = warn[r.dataset.key]||''; });
+  state.warn = warn;
+}
+function hasErrors(){ return Object.keys(state.warn||{}).some(k=>k!=='SWCFileName'); }
+function findItem(k){ for(const g of state.schema) for(const it of g.items) if(it.key===k) return it; return null; }
+
+$('#filter').oninput = e => {
+  const q=e.target.value.toLowerCase();
+  document.querySelectorAll('details.group').forEach(d=>{
+    let any=false;
+    d.querySelectorAll('.prow').forEach(r=>{ const m=!q||r.dataset.key.toLowerCase().includes(q)||r.title.toLowerCase().includes(q); r.style.display=m?'':'none'; any=any||m; });
+    d.style.display=any?'':'none'; if(q&&any) d.open=true;
+  });
+};
+$('#resetBtn').onclick = () => { loadValues(state.presets[$('#preset').value], true); changed(); };
+$('#importBtn').onclick = () => $('#importFile').click();
+$('#importFile').onchange = async e => {
+  const f=e.target.files[0]; if(!f) return;
+  const r=await fetch('/api/parse',{method:'POST',body:JSON.stringify({text:await f.text()})}).then(r=>r.json());
+  state.presets[f.name]=r.values; const o=document.createElement('option'); o.textContent=f.name; $('#preset').appendChild(o); $('#preset').value=f.name;
+  loadValues(r.values, true); changed(); e.target.value='';
+};
+$('#exportBtn').onclick = async () => {
+  const txt = await fetch('/api/render',{method:'POST',body:JSON.stringify({values:state.values})}).then(r=>r.text());
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
+  a.download=(state.values.SimulationName||'sim')+'_parameters.in'; a.click();
+};
+
+/* ---------------- running ---------------- */
+async function runSim(){
+  clearTimeout(state.autoTimer);
+  const overrides = {};
+  if($('#preview').checked){
+    const px=parseFloat(state.values.pixelsize); overrides.pixelsize = String(Math.max(isNaN(px)?2:px, 2.0));
+    const n=parseInt(state.values.N_SWC); overrides.N_SWC = String(Math.max(isNaN(n)?40:n, 40));
+  }
+  setStatus('running','starting…');
+  const body={values:state.values, overrides, swc_text: isTrue(state.values.ReadFromSWC)?state.swcText:null};
+  const r = await fetch('/api/run',{method:'POST',body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({error:String(e)}));
+  if(r.error){ setStatus('error','error'); showLog('[webgui] '+r.error+'\n', true); return; }
+  connect(r.run, true);
+}
+$('#runBtn').onclick = () => { if(hasErrors() && !confirm('Some parameters look invalid. Run anyway?')) return; runSim(); };
+$('#stopBtn').onclick = async () => { await fetch('/api/stop',{method:'POST',body:JSON.stringify({run:state.run})}); };
+
+function connect(runId, fresh){
+  if(state.es) state.es.close();
+  state.run=runId; state.frames={}; state.stats={}; state.idx=0; state.sample=1; state.fitted=false;
+  $('#log').textContent=''; updateSlider(); draw(); drawChart();
+  const res = 0.4;
+  const es = new EventSource(`/api/events?run=${encodeURIComponent(runId)}&res=${res}`);
+  state.es = es;
+  es.addEventListener('start', e => {
+    const d=JSON.parse(e.data); state.runParams=d.params;
+    state.unit = (d.params.SpatialUnit||'µm').replace(/^micron$/i,'µm'); state.tunit=d.params.TemporalUnit||'';
+    $('#rotHint').style.display = String(d.params.Dimension).trim()==='3' ? '' : 'none';
+    if(String(d.params.Dimension).trim()!=='3'){ state.view.yaw=0; state.view.pitch=0; }
+    else if(!state.view.yaw && !state.view.pitch){ state.view.yaw=0.5; state.view.pitch=-0.5; }
+    setStatus('running','running'); $('#stopBtn').disabled=false;
+  });
+  es.addEventListener('log', e => showLog(JSON.parse(e.data).text));
+  es.addEventListener('stats', e => {
+    const d=JSON.parse(e.data); (state.stats[d.sample] ||= []).push(...d.rows); drawChart();
+  });
+  es.addEventListener('frame', e => {
+    const f=JSON.parse(e.data); prepFrame(f);
+    const arr = (state.frames[f.sample] ||= []); arr.push(f); arr.sort((a,b)=>a.t-b.t);
+    updateSamples();
+    if(f.sample===state.sample){
+      if(!state.fitted){ fit(); state.fitted=true; }
+      if($('#follow').checked) state.idx = arr.length-1;
+      updateSlider(); draw();
+    }
+  });
+  es.addEventListener('done', e => {
+    const d=JSON.parse(e.data); es.close(); $('#stopBtn').disabled=true;
+    if(d.stopped) setStatus('', 'stopped');
+    else if(d.returncode===0 || d.returncode===null) setStatus('done', d.elapsed!=null?`done · ${d.elapsed}s`:'loaded');
+    else { setStatus('error',`failed (exit ${d.returncode})`); switchTab('log'); }
+    refreshRuns(); draw();
+  });
+  es.onerror = () => {};
+  refreshRuns();
+}
+
+function setStatus(cls, txt){ const s=$('#status'); s.className=cls; s.textContent=txt; }
+function showLog(t, open){
+  const L=$('#log'); L.textContent = (L.textContent + t).slice(-120000);
+  const p=$('#tab-log'); p.scrollTop=p.scrollHeight; if(open) switchTab('log');
+}
+function switchTab(t){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('on',p.id==='tab-'+t));
+  if(t==='runs') refreshRuns();
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.t));
+
+async function refreshRuns(){
+  const r=await fetch('/api/runs').then(r=>r.json()).catch(()=>({runs:[]}));
+  $('#tab-runs').innerHTML = r.runs.length ? r.runs.map(x=>`<a data-run="${x.id}" title="replay this run">${x.id===state.run?'▸ ':''}${x.id}${x.running?' (running)':''} · ${x.frames} fr</a>`).join('')
+    + '<div class="muted">Click a run to replay it. Folders live in webgui/runs/.</div>' : '<div class="muted">No runs yet.</div>';
+  $('#tab-runs').querySelectorAll('[data-run]').forEach(a=>a.onclick=e=>{ e.preventDefault(); connect(a.dataset.run,false); });
+}
+
+/* ---------------- frames & geometry ---------------- */
+function prepFrame(f){
+  const n=f.x.length, p=f.p, nch=new Uint16Array(n);
+  for(let i=0;i<n;i++) if(p[i]>=0) nch[p[i]]++;
+  const order=new Uint16Array(n), dist=new Float32Array(n);
+  let maxO=0, maxD=0, maxR=0, minZ=Infinity, maxZ=-Infinity;
+  for(let i=0;i<n;i++){
+    const q=p[i];
+    if(q>=0){
+      order[i]= order[q] + (nch[q]>=2 ? 1:0);
+      dist[i] = dist[q] + Math.hypot(f.x[i]-f.x[q], f.y[i]-f.y[q], f.z[i]-f.z[q]);
+    }
+    if(order[i]>maxO) maxO=order[i]; if(dist[i]>maxD) maxD=dist[i]; if(f.r[i]>maxR) maxR=f.r[i];
+    if(f.z[i]<minZ) minZ=f.z[i]; if(f.z[i]>maxZ) maxZ=f.z[i];
+  }
+  Object.assign(f,{order,dist,maxO,maxD,maxR,minZ,maxZ});
+}
+function curFrames(){ return state.frames[state.sample]||[]; }
+function curFrame(){ const a=curFrames(); return a[Math.min(state.idx,a.length-1)]; }
+
+function updateSamples(){
+  const ks=Object.keys(state.frames).map(Number).sort((a,b)=>a-b);
+  const sel=$('#sampleSel'); sel.style.display = ks.length>1 ? '' : 'none';
+  if(sel.options.length!==ks.length){ sel.innerHTML=ks.map(k=>`<option value="${k}" ${k===state.sample?'selected':''}>sample ${k}</option>`).join(''); }
+}
+$('#sampleSel').onchange = e => { state.sample=+e.target.value; state.idx=curFrames().length-1; updateSlider(); draw(); drawChart(); };
+
+function updateSlider(){
+  const a=curFrames(), s=$('#slider'); s.max=Math.max(0,a.length-1); s.value=state.idx;
+  const f=curFrame();
+  $('#flabel').textContent = f ? `frame ${state.idx+1}/${a.length} · t=${fmt(f.t)} ${state.tunit}` : '–';
+  $('#empty').style.display = f ? 'none' : 'flex';
+  updateFiles();
+}
+$('#slider').oninput = e => { state.idx=+e.target.value; const a=curFrames(); $('#follow').checked = state.idx===a.length-1; updateSlider(); draw(); };
+$('#playBtn').onclick = () => {
+  state.playing=!state.playing; $('#playBtn').textContent=state.playing?'❚❚':'▶';
+  if(state.playing){ if(state.idx>=curFrames().length-1) state.idx=0; $('#follow').checked=false; tick(); }
+};
+function tick(){
+  if(!state.playing) return;
+  const a=curFrames();
+  if(state.idx < a.length-1){ state.idx++; updateSlider(); draw(); }
+  else if(!(state.es && state.es.readyState!==2)){ state.playing=false; $('#playBtn').textContent='▶'; return; }
+  setTimeout(tick, 220);
+}
+
+function updateFiles(){
+  const f=curFrame(), r=state.run; const el=$('#tab-files');
+  if(!f||!r){ el.innerHTML='<div class="muted">Files of the current frame appear here.</div>'; return; }
+  const u=n=>`/files/${encodeURIComponent(r)}/${encodeURIComponent(n)}`;
+  const sim=state.runParams?.SimulationName||'';
+  el.innerHTML = `<div class="muted">current frame</div>
+   <a href="${u(f.swc)}">${f.swc}</a>
+   ${f.tif?`<a href="${u(f.tif)}">${f.tif}</a>`:''}
+   <a href="${u(f.swc.replace('-Conf-','-BranchStats-').replace(/\.swc$/,'.csv'))}">${f.swc.replace('-Conf-','-BranchStats-').replace(/\.swc$/,'.csv')}</a>
+   <div class="muted">run</div>
+   <a href="${u('parameters.in')}">parameters.in</a>
+   <a href="${u(sim+'-TemproralProps-'+state.sample+'.csv')}">${sim}-TemproralProps-${state.sample}.csv</a>
+   <a href="${u('run.log')}">run.log</a>
+   <a id="loadParams" href="#" title="Copy this run's parameters into the panel">↺ load this run's parameters into the panel</a>
+   <div class="muted">Everything is saved in webgui/runs/${r}/</div>`;
+  $('#loadParams').onclick = e => { e.preventDefault(); if(!state.runParams) return;
+    const ac=$('#autorun').checked; $('#autorun').checked=false; loadValues(state.runParams,false); validate(); markChanged(); $('#autorun').checked=ac; };
+}
+
+/* ---------------- time-dependent parameter interpolation (mirrors InterpolatedParameter) ---------------- */
+function interp(rows, t){
+  const pts = (rows||[]).filter(r=>String(r[1]).trim()!=='').map(r=>[r[0]===null||r[0]===''?0:Number(r[0]), nums(r[1]).map(Number)]).sort((a,b)=>a[0]-b[0]);
+  if(!pts.length) return null;
+  if(t<=pts[0][0]) return pts[0][1];
+  for(let i=1;i<pts.length;i++) if(t<pts[i][0]){ const a=(t-pts[i-1][0])/(pts[i][0]-pts[i-1][0]); return pts[i-1][1].map((v,j)=>v+(pts[i][1][j]-v)*a); }
+  return pts[pts.length-1][1];
+}
+const toRows = v => Array.isArray(v) ? v : [[null, v]];
+
+/* ---------------- rendering ---------------- */
+const cv=$('#view'), ctx=cv.getContext('2d');
+function resize(){
+  const r=cv.parentElement.getBoundingClientRect(), d=devicePixelRatio||1;
+  cv.width=r.width*d; cv.height=r.height*d; cv.style.width=r.width+'px'; cv.style.height=r.height+'px';
+  const c=$('#chart'), rc=c.getBoundingClientRect(); c.width=rc.width*d; c.height=rc.height*d;
+  draw(); drawChart();
+}
+window.addEventListener('resize', resize);
+
+function rot(x,y,z){
+  const {yaw,pitch}=state.view, cy=Math.cos(yaw), sy=Math.sin(yaw), cp=Math.cos(pitch), sp=Math.sin(pitch);
+  const x1=cy*x - sy*y, y1=sy*x + cy*y;     // rotate about z
+  return [x1, cp*y1 - sp*z, sp*y1 + cp*z];  // tilt about x
+}
+function toScreen(x,y,z){
+  const [a,b]=rot(x,y,z), v=state.view, d=devicePixelRatio||1;
+  return [cv.width/2 + (a-v.cx)*v.scale*d, cv.height/2 - (b-v.cy)*v.scale*d];
+}
+function fit(){
+  const P=state.runParams||state.values, te=Number(P.Time_End);
+  const lx=interp(toRows(P.LimitsX),te), ly=interp(toRows(P.LimitsY),te), lz=interp(toRows(P.LimitsZ),te)||[0,0];
+  let xs=[],ys=[];
+  const f=curFrame();
+  if(lx&&ly&&lx.every(isFinite)&&ly.every(isFinite)){
+    for(const X of lx) for(const Y of ly) for(const Z of lz){ const [a,b]=rot(X,Y,Z); xs.push(a); ys.push(b); }
+  } else if(f){ for(let i=0;i<f.x.length;i+=7){ const [a,b]=rot(f.x[i],f.y[i],f.z[i]); xs.push(a); ys.push(b);} }
+  if(!xs.length) return;
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const r=cv.getBoundingClientRect();
+  state.view.cx=(x0+x1)/2; state.view.cy=(y0+y1)/2;
+  state.view.scale=0.9*Math.min(r.width/Math.max(x1-x0,1e-6), r.height/Math.max(y1-y0,1e-6));
+}
+$('#fitBtn').onclick=()=>{fit();draw();};
+
+const PAL=[[79,179,169],[227,161,79],[110,160,230],[214,110,160],[150,200,90],[230,210,100],[160,130,220],[90,200,220],[240,130,100],[200,200,200]];
+function ramp(t){ // perceptual-ish teal→yellow→orange
+  t=Math.max(0,Math.min(1,t));
+  const s=[[40,60,120],[50,130,170],[79,190,160],[210,215,100],[240,150,70]];
+  const k=t*(s.length-1), i=Math.min(s.length-2,Math.floor(k)), a=k-i;
+  return s[i].map((v,j)=>Math.round(v+(s[i+1][j]-v)*a));
+}
+
+function draw(){
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  const f=curFrame(); const d=devicePixelRatio||1;
+  const img=$('#img');
+  if(state.mode==='tif'){
+    cv.style.display='none';
+    if(f&&f.tif){ const src=`/api/image?run=${encodeURIComponent(state.run)}&file=${encodeURIComponent(f.tif)}`; if(img.dataset.src!==src){ img.src=src; img.dataset.src=src; } img.style.display='block'; }
+    else img.style.display='none';
+  } else { cv.style.display='block'; img.style.display='none'; }
+  overlay(f);
+  if(!f || state.mode==='tif') return;
+  const P=state.runParams||state.values;
+  if($('#showBox').checked) drawBox(P, f.t);
+
+  const mode=$('#colorBy').value, useR=$('#showRad').checked, n=f.x.length;
+  // project once
+  const sx=new Float32Array(n), sy=new Float32Array(n), sz=new Float32Array(n);
+  for(let i=0;i<n;i++){ const [a,b,c]=rot(f.x[i],f.y[i],f.z[i]); sx[i]=cv.width/2+(a-state.view.cx)*state.view.scale*d; sy[i]=cv.height/2-(b-state.view.cy)*state.view.scale*d; sz[i]=c; }
+  const NB=24, buckets=new Map();
+  const colorOf = i => {
+    if(mode==='order'){ const c=PAL[f.order[i]%PAL.length]; return `rgb(${c})`; }
+    let t=0;
+    if(mode==='radius') t=f.maxR>0? f.r[i]/f.maxR:0;
+    else if(mode==='dist') t=f.maxD>0? f.dist[i]/f.maxD:0;
+    else if(mode==='z') t=f.maxZ>f.minZ? (f.z[i]-f.minZ)/(f.maxZ-f.minZ):0.5;
+    else return 'rgb(220,226,233)';
+    return `rgb(${ramp(Math.round(t*NB)/NB)})`;
+  };
+  for(let i=0;i<n;i++){
+    const q=f.p[i]; if(q<0) continue;
+    const w = useR ? Math.max(0.9*d, 2*f.r[i]*state.view.scale*d) : 1.2*d;
+    const key = colorOf(i)+'|'+(Math.round(w*2)/2);
+    let b=buckets.get(key); if(!b){ b=[]; buckets.set(key,b); } b.push(q,i);
+  }
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  for(const [key,segs] of buckets){
+    const [col,w]=key.split('|'); ctx.strokeStyle=col; ctx.lineWidth=+w; ctx.beginPath();
+    for(let k=0;k<segs.length;k+=2){ const a=segs[k], b=segs[k+1]; ctx.moveTo(sx[a],sy[a]); ctx.lineTo(sx[b],sy[b]); }
+    ctx.stroke();
+  }
+  // soma
+  const R=Number(P.RadiusSoma)||0, root=nums(P.Root).map(Number);
+  if(R>0 && root.length>=2){ const [a,b]=toScreen(root[0],root[1],root[2]||0); ctx.fillStyle='rgba(230,233,238,.9)'; ctx.beginPath(); ctx.arc(a,b,Math.max(2*d,R*state.view.scale*d),0,7); ctx.fill(); }
+}
+
+function drawBox(P,t){
+  const lx=interp(toRows(P.LimitsX),t), ly=interp(toRows(P.LimitsY),t), lz=interp(toRows(P.LimitsZ),t)||[0,0];
+  if(!lx||!ly||![...lx,...ly].every(isFinite)) return;
+  const d=devicePixelRatio||1; ctx.setLineDash([6*d,5*d]); ctx.lineWidth=1*d; ctx.strokeStyle='rgba(227,161,79,.65)';
+  const z3 = String(P.Dimension).trim()==='3' ? lz : [0];
+  const C=[]; for(const z of z3) C.push([lx[0],ly[0],z],[lx[1],ly[0],z],[lx[1],ly[1],z],[lx[0],ly[1],z]);
+  const E=[[0,1],[1,2],[2,3],[3,0]]; if(C.length===8) E.push([4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]);
+  ctx.beginPath(); for(const [a,b] of E){ const p=toScreen(...C[a]), q=toScreen(...C[b]); ctx.moveTo(...p); ctx.lineTo(...q); } ctx.stroke(); ctx.setLineDash([]);
+}
+
+function fmt(x){ return Math.abs(x)>=100? x.toFixed(0) : x.toFixed(2); }
+function overlay(f){
+  $('#tlabel').innerHTML = f ? `t = ${fmt(f.t)} ${state.tunit}<small>${state.run||''}</small>` : '';
+  $('#fstats').innerHTML = f ? `tips ${f.tips}<br>branch points ${f.branchPoints}<br>total length ${f.totalLength.toFixed(0)} ${state.unit}<br>SWC nodes ${f.nPoints.toLocaleString()}` : '';
+  // scalebar
+  if(f && state.mode==='morph'){
+    const target=110/state.view.scale; const p=Math.pow(10,Math.floor(Math.log10(target))); const L=[1,2,5,10].map(m=>m*p).filter(v=>v<=target).pop()||p;
+    $('#scalebar').innerHTML=`<div style="width:${L*state.view.scale}px"></div>${L} ${state.unit}`;
+  } else $('#scalebar').innerHTML='';
+  const m=$('#colorBy').value;
+  if(f && state.mode==='morph' && m!=='mono'){
+    if(m==='order'){
+      const k=Math.min(f.maxO+1,PAL.length);
+      $('#legend').innerHTML='branch order<br>'+Array.from({length:k},(_,i)=>`<span style="color:rgb(${PAL[i]})">■</span>${i}${i===PAL.length-1?'+':''}`).join(' ');
+    } else {
+      const lab={radius:[0,f.maxR,state.unit,'radius'],dist:[0,f.maxD,state.unit,'path distance'],z:[f.minZ,f.maxZ,state.unit,'z']}[m];
+      $('#legend').innerHTML=`${lab[3]} (${lab[2]})<br>${lab[0].toFixed(2)} – ${lab[1].toFixed(2)}`;
+      const c=document.createElement('canvas'); c.width=140; c.height=8; const g=c.getContext('2d');
+      for(let x=0;x<140;x++){ g.fillStyle=`rgb(${ramp(x/139)})`; g.fillRect(x,0,1,8); } $('#legend').appendChild(c);
+    }
+  } else $('#legend').innerHTML='';
+}
+
+/* interaction */
+let drag=null;
+cv.addEventListener('mousedown',e=>{ drag={x:e.clientX,y:e.clientY,shift:e.shiftKey||e.button===2}; cv.classList.add('drag'); });
+window.addEventListener('mouseup',()=>{ drag=null; cv.classList.remove('drag'); });
+window.addEventListener('mousemove',e=>{
+  if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag.x=e.clientX; drag.y=e.clientY;
+  const is3=String((state.runParams||state.values).Dimension).trim()==='3';
+  if(is3 && !drag.shift){ state.view.yaw+=dx*0.008; state.view.pitch=Math.max(-Math.PI/2,Math.min(Math.PI/2,state.view.pitch+dy*0.008)); }
+  else { state.view.cx-=dx/state.view.scale; state.view.cy+=dy/state.view.scale; }
+  draw();
+});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{
+  e.preventDefault(); const r=cv.getBoundingClientRect(); const k=Math.exp(-e.deltaY*0.0015);
+  const mx=e.clientX-r.left-r.width/2, my=-(e.clientY-r.top-r.height/2);
+  state.view.cx += mx/state.view.scale*(1-1/k); state.view.cy += my/state.view.scale*(1-1/k); state.view.scale*=k; draw();
+},{passive:false});
+cv.addEventListener('dblclick',()=>{fit();draw();});
+['colorBy','showBox','showRad'].forEach(id=>$('#'+id).onchange=draw);
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{
+  state.mode=b.dataset.m; document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  $('#morphTools').style.display = state.mode==='morph'?'':'none'; draw();
+});
+window.addEventListener('keydown',e=>{
+  if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if(e.key==='ArrowRight'){ state.idx=Math.min(curFrames().length-1,state.idx+1); updateSlider(); draw(); }
+  if(e.key==='ArrowLeft'){ state.idx=Math.max(0,state.idx-1); $('#follow').checked=false; updateSlider(); draw(); }
+  if(e.key===' '){ e.preventDefault(); $('#playBtn').click(); }
+});
+
+/* ---------------- stats chart ---------------- */
+function drawChart(){
+  const c=$('#chart'), g=c.getContext('2d'), d=devicePixelRatio||1, W=c.width, H=c.height;
+  g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,W,H);
+  const rows=state.stats[state.sample]||[];
+  const series=[{i:2,name:'tips',col:'#4fb3a9'},{i:1,name:'branches',col:'#6ea0e6'},{i:3,name:'total length ('+state.unit+')',col:'#e3a14f'}];
+  const pad={l:44*d,r:14*d,t:14*d,b:22*d}, n=series.length, gap=48*d;
+  const pw=(W-pad.l-pad.r-gap*(n-1))/n, ph=H-pad.t-pad.b;
+  g.font=`${11*d}px ui-monospace,Menlo,monospace`;
+  const P=state.runParams||state.values; const t0=Number(P.Time_Start), t1=Number(P.Time_End);
+  const f=curFrame();
+  series.forEach((s,k)=>{
+    const x0=pad.l+k*(pw+gap);
+    g.strokeStyle='#2a313b'; g.lineWidth=1*d; g.strokeRect(x0,pad.t,pw,ph);
+    g.fillStyle='#8b95a3'; g.fillText(s.name, x0+6*d, pad.t+13*d);
+    if(!rows.length) return;
+    let ymax=0; for(const r of rows) ymax=Math.max(ymax,r[s.i]); ymax=ymax*1.08||1;
+    const X=t=>x0+(t-t0)/(t1-t0||1)*pw, Y=v=>pad.t+ph-(v/ymax)*ph;
+    g.fillStyle='#8b95a3'; g.textAlign='right'; g.fillText(ymax>=1000?(ymax/1000).toFixed(1)+'k':ymax.toFixed(0), x0-4*d, pad.t+9*d); g.fillText('0',x0-4*d,pad.t+ph); g.textAlign='left';
+    if(k===0){ g.fillText(fmt(t0), x0, H-6*d); }
+    if(k===n-1){ g.textAlign='right'; g.fillText(fmt(t1)+' '+state.tunit, x0+pw, H-6*d); g.textAlign='left'; }
+    g.strokeStyle=s.col; g.lineWidth=1.6*d; g.beginPath();
+    rows.forEach((r,j)=>{ const x=X(r[0]), y=Y(r[s.i]); j?g.lineTo(x,y):g.moveTo(x,y); }); g.stroke();
+    const last=rows[rows.length-1]; g.fillStyle=s.col; g.textAlign='right'; g.fillText(last[s.i]>=1000?last[s.i].toFixed(0):(+last[s.i].toFixed(1)).toString(), x0+pw-6*d, pad.t+13*d); g.textAlign='left';
+    if(f){ g.strokeStyle='rgba(230,233,238,.35)'; g.lineWidth=1*d; g.beginPath(); g.moveTo(X(f.t),pad.t); g.lineTo(X(f.t),pad.t+ph); g.stroke(); }
+  });
+}
+const _upd=updateSlider; updateSlider=function(){ _upd(); drawChart(); };
+
+resize(); init();
+</script>
+</body>
+</html>
